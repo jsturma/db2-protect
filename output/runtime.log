@@ -1,0 +1,21 @@
+[root@db2 db2-protect]# su - db2inst1 -c 'bash -x /opt/db2-protect/backup-db2.sh'
++ set -euo pipefail
++++ dirname /opt/db2-protect/backup-db2.sh
+++ cd /opt/db2-protect
+++ pwd
++ SCRIPT_DIR=/opt/db2-protect
+++ cd /opt/db2-protect/..
+++ pwd
++ PROJECT_ROOT=/opt
++ CONFIG_FILE=/opt/etc/backup-config.yaml
++ LOG_DIR=/opt/logs
++ LOG_FILE=/opt/logs/db2-backup.log
++ date +%N
++ date +%N
++ grep -q '[0-9]'
+++ date +%Y%m%d_%H%M%S
+++ date +%N
+++ head -c 3
++ TIMESTAMP=20251121_133642504
++ mkdir -p /opt/logs
+mkdir: cannot create directory ‘/opt/logs’: Permission denied
