@@ -1,11 +1,26 @@
 [root@db2 db2-protect]# su - db2inst1 -c '/opt/db2-protect/backup-db2.sh'
-[2025-11-21 15:39:56] [INFO] === DB2 Backup Started ===
-[2025-11-21 15:39:56] [INFO] DB2 user: db2inst1
-[2025-11-21 15:39:56] [INFO] DB2 found for user db2inst1
-[2025-11-21 15:39:56] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
-[2025-11-21 15:39:56] [INFO] Config: type=full path=/mnt/backup/db2 conn=local db=SAMPLE
-[2025-11-21 15:39:56] [INFO] Space: 11GB
-[2025-11-21 15:39:59] [INFO] Connected: SAMPLE
-[2025-11-21 15:39:59] [INFO] Verifying backup rights...
-[2025-11-21 15:40:00] [INFO] Auth ID: DB2INST1
-[2025-11-21 15:40:01] [WARN] Cannot query system authorities
+[2025-11-21 15:44:27] [INFO] === DB2 Backup Started ===
+[2025-11-21 15:44:27] [INFO] DB2 user: db2inst1
+[2025-11-21 15:44:27] [INFO] DB2 found for user db2inst1
+[2025-11-21 15:44:27] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
+[2025-11-21 15:44:27] [INFO] Config: type=full path=/mnt/backup/db2 conn=local db=SAMPLE
+[2025-11-21 15:44:27] [INFO] Space: 11GB
+[2025-11-21 15:44:29] [INFO] Connected: SAMPLE
+[2025-11-21 15:44:29] [INFO] Verifying backup rights...
+[2025-11-21 15:44:32] [INFO] Auth ID: DB2INST1
+[2025-11-21 15:44:33] [WARN] Cannot verify rights (connection issue) - proceeding (DB2 will validate during backup)
+[2025-11-21 15:44:33] [INFO] Ensuring database connection...
+[2025-11-21 15:44:33] [INFO] Starting full backup: SAMPLE -> /mnt/backup/db2/SAMPLE/20251121_154427893/
+[2025-11-21 15:44:33] [INFO] Executing: db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_154427893/SAMPLE_full_20251121_154427893' COMPRESS WITH 1024 BUFFER PARALLELISM 4 WITHOUT PROMPTING"
+[2025-11-21 15:44:34] [INFO] Backup completed in session: /mnt/backup/db2/SAMPLE/20251121_154427893
+[2025-11-21 15:44:34] [WARN] No backup files found
+[2025-11-21 15:44:34] [INFO] Disconnecting...
+[root@db2 db2-protect]# ls -ail /mnt/backup/db2/SAMPLE/
+total 0
+33589113 drwxrwxr-x. 3 db2inst1 db2inst1 32 Nov 21 15:44 .
+33589114 drwxrw-rw-. 3 db2inst1 db2inst1 74 Nov 21 15:44 ..
+50343701 drwxrwxr-x. 2 db2inst1 db2inst1  6 Nov 21 15:44 20251121_154427893
+[root@db2 db2-protect]# ls -ail /mnt/backup/db2/SAMPLE/20251121_154427893/
+total 0
+50343701 drwxrwxr-x. 2 db2inst1 db2inst1  6 Nov 21 15:44 .
+33589113 drwxrwxr-x. 3 db2inst1 db2inst1 32 Nov 21 15:44 ..
