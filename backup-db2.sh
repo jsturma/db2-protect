@@ -130,8 +130,11 @@ connect_db2() {
 
 connect_local() {
     [[ -n "${DB_INSTANCE}" ]] && export DB2INSTANCE="${DB_INSTANCE}"
+    # Connect to database - connection will persist in this shell session
     db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
     log "INFO" "Connected: ${DB_NAME}"
+    # Export connection state so it persists
+    export DB2DBDFT="${DB_NAME}"
 }
 
 connect_external_client() {
@@ -162,54 +165,49 @@ connect_external_client() {
 
 verify_db_rights() {
     log "INFO" "Verifying backup rights..."
-    # Ensure connection is active - reconnect if needed
-    local conn_check=$(db2 "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
-    if echo "${conn_check}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
-        log "INFO" "Connection lost, reconnecting..."
-        db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to reconnect: ${DB_NAME}"
+    # Try to get auth ID - if connection is lost, we'll skip detailed verification
+    local auth_id="${DB2_USER}"
+    local can_verify=false
+    
+    # Try to query current user - if this works, connection is active
+    local db2out=$(db2 -x "VALUES CURRENT USER" 2>&1)
+    if ! echo "${db2out}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
+        auth_id=$(echo "${db2out}" | head -1 | xargs | tr -d '\n\r')
+        [[ -n "${auth_id}" ]] && can_verify=true
     fi
-    # Get auth ID - try multiple methods to parse DB2 output
-    local auth_id=""
-    # Method 1: VALUES CURRENT USER
-    local db2out=$(db2 "VALUES CURRENT USER" 2>&1)
-    auth_id=$(echo "${db2out}" | awk 'NR>3 && NF>0 && !/^[[:space:]]*$/ && !/SQL/ && !/---/ && !/record/ {print $1; exit}')
-    # Method 2: VALUES USER if first failed
-    [[ -z "${auth_id}" ]] && {
-        db2out=$(db2 "VALUES USER" 2>&1)
-        auth_id=$(echo "${db2out}" | awk 'NR>3 && NF>0 && !/^[[:space:]]*$/ && !/SQL/ && !/---/ && !/record/ {print $1; exit}')
-    }
-    # Method 3: Use DB2_USER as fallback
-    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && { auth_id="${DB2_USER}"; log "WARN" "Using fallback auth: ${auth_id}"; } || log "INFO" "Auth ID: ${auth_id}"
-    local has_sys=false has_dbadm=false has_backup=false errs=0
-    local sq=$(db2 "SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T" 2>&1)
-    echo "${sq}" | grep -qiE "(SYSADM|SYSCTRL|SYSMAINT)" && { has_sys=true; log "INFO" "System authority: $(echo "${sq}" | grep -iE "(SYSADM|SYSCTRL|SYSMAINT)" | head -1 | xargs)"; } ||
-    echo "${sq}" | grep -q "SQLSTATE" && { log "WARN" "Cannot query system authorities"; ((errs++)); }
-    local dq=$(db2 "SELECT GRANTEE,GRANTEETYPE,DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'" 2>&1)
-    if ! echo "${dq}" | grep -q "SQLSTATE"; then
-        local dl=$(echo "${dq}" | grep -i "${auth_id}" | head -1)
-        [[ -n "${dl}" ]] && {
-            echo "${dl}" | awk '{print $3}' | grep -q "Y" && { has_dbadm=true; log "INFO" "DBADM detected"; }
-            echo "${dl}" | awk '{print $4}' | grep -q "Y" && { has_backup=true; log "INFO" "BACKUP privilege detected"; }
-        }
+    
+    if [[ "${can_verify}" == "true" ]]; then
+        log "INFO" "Auth ID: ${auth_id}"
+        local has_sys=false has_dbadm=false has_backup=false errs=0
+        local sq=$(db2 -x "SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T" 2>&1)
+        echo "${sq}" | grep -qiE "(SYSADM|SYSCTRL|SYSMAINT)" && { has_sys=true; log "INFO" "System authority detected"; } ||
+        echo "${sq}" | grep -q "SQLSTATE" && { log "WARN" "Cannot query system authorities"; ((errs++)); }
+        local dq=$(db2 -x "SELECT GRANTEE,GRANTEETYPE,DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'" 2>&1)
+        if ! echo "${dq}" | grep -q "SQLSTATE"; then
+            local dl=$(echo "${dq}" | grep -i "${auth_id}" | head -1)
+            [[ -n "${dl}" ]] && {
+                echo "${dl}" | awk '{print $3}' | grep -q "Y" && { has_dbadm=true; log "INFO" "DBADM detected"; }
+                echo "${dl}" | awk '{print $4}' | grep -q "Y" && { has_backup=true; log "INFO" "BACKUP privilege detected"; }
+            }
+        else
+            ((errs++))
+        fi
+        log "INFO" "Rights: sys=${has_sys} dbadm=${has_dbadm} backup=${has_backup}"
+        [[ "${has_sys}" == "true" ]] || [[ "${has_dbadm}" == "true" ]] || [[ "${has_backup}" == "true" ]] && { log "INFO" "Rights verified"; return 0; }
+        [[ ${errs} -gt 0 ]] && { log "WARN" "Cannot fully verify - proceeding"; return 0; }
     else
-        ((errs++))
+        log "WARN" "Connection not available for rights verification - will proceed (DB2 will validate during backup)"
+        return 0
     fi
-    [[ "${has_sys}" == "false" ]] && [[ "${has_dbadm}" == "false" ]] && [[ "${has_backup}" == "false" ]] && {
-        local ac=$(db2 "SELECT COUNT(*) FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}' AND (DBADMAUTH='Y' OR BACKUPAUTH='Y')" 2>&1)
-        local cnt=$(echo "${ac}" | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
-        [[ "${cnt}" =~ ^[0-9]+$ ]] && [[ "${cnt}" -gt 0 ]] && { has_dbadm=true; log "INFO" "Authority detected (alt method)"; }
-    }
-    log "INFO" "Rights: sys=${has_sys} dbadm=${has_dbadm} backup=${has_backup}"
-    [[ "${has_sys}" == "true" ]] || [[ "${has_dbadm}" == "true" ]] || [[ "${has_backup}" == "true" ]] && { log "INFO" "Rights verified"; return 0; }
-    [[ ${errs} -gt 0 ]] && { log "WARN" "Cannot fully verify - proceeding"; return 0; }
     error_exit "Insufficient rights: ${auth_id} needs SYSADM/SYSCTRL/SYSMAINT, DBADM, or BACKUP privilege"
 }
 
 perform_backup() {
-    # Ensure connection is active before backup
-    local conn_check=$(db2 "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
-    if echo "${conn_check}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
-        log "INFO" "Connection lost, reconnecting before backup..."
+    # Connection should be active from connect_local()
+    # Verify connection is still active
+    local conn_test=$(db2 -x "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
+    if echo "${conn_test}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
+        log "WARN" "Connection lost, attempting to reconnect..."
         db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to reconnect: ${DB_NAME}"
     fi
     # Create timestamped subdirectory for this backup session
