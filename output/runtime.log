@@ -1,9 +1,9 @@
 [root@db2 db2-protect]# su - db2inst1 -c 'bash /opt/db2-protect/backup-db2.sh'
-[2025-11-21 14:03:23] [INFO] === DB2 Backup Started ===
-[2025-11-21 14:03:23] [INFO] DB2 user: db2inst1
-[2025-11-21 14:03:23] [INFO] DB2 found for user db2inst1
-[2025-11-21 14:03:23] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
-[2025-11-21 14:03:23] [INFO] Config: type=full path=/mnt/backup/db2 conn=local # local, cataloged, or non-cataloged db=SAMPLE
-[2025-11-21 14:03:23] [WARN] Path /mnt/backup/db2 must be accessible from DB2 server: server
-[2025-11-21 14:03:23] [INFO] Connecting as external client...
-[2025-11-21 14:03:23] [ERROR] Invalid connection_type: local # local, cataloged, or non-cataloged
+[2025-11-21 14:09:19] [INFO] === DB2 Backup Started ===
+[2025-11-21 14:09:19] [INFO] DB2 user: db2inst1
+[2025-11-21 14:09:19] [INFO] DB2 found for user db2inst1
+[2025-11-21 14:09:19] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
+[2025-11-21 14:09:19] [INFO] Config: type=full path=/mnt/backup/db2 conn=local # local, cataloged, or non-cataloged db=SAMPLE
+[2025-11-21 14:09:19] [WARN] Path /mnt/backup/db2 must be accessible from DB2 server: server
+[2025-11-21 14:09:19] [INFO] Connecting as external client...
+[2025-11-21 14:09:19] [ERROR] Invalid connection_type: local # local, cataloged, or non-cataloged
