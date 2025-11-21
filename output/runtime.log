@@ -1,45 +1,49 @@
++ mountpoint -q /mnt/backup/db2
++ [[ -w /mnt/backup/db2 ]]
+++ df -BG /mnt/backup/db2
+++ tail -1
+++ sed s/G//
+++ awk '{print $4}'
++ local av=11
++ [[ 11 -lt 1 ]]
++ log INFO 'Space: 11GB'
++ local l=INFO
++ shift
+++ date '+%Y-%m-%d %H:%M:%S'
++ local 'msg=[2025-11-21 15:00:22] [INFO] Space: 11GB'
++ echo '[2025-11-21 15:00:22] [INFO] Space: 11GB'
+[2025-11-21 15:00:22] [INFO] Space: 11GB
++ echo '[2025-11-21 15:00:22] [INFO] Space: 11GB'
++ connect_db2
++ [[ false == \t\r\u\e ]]
 + connect_local
 + [[ -n db2inst1 ]]
 + export DB2INSTANCE=db2inst1
 + DB2INSTANCE=db2inst1
-+ db2_cmd 'db2 connect to SAMPLE'
++ db2 connect to SAMPLE
 + log INFO 'Connected: SAMPLE'
 + local l=INFO
 + shift
 ++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 14:53:41] [INFO] Connected: SAMPLE'
-+ echo '[2025-11-21 14:53:41] [INFO] Connected: SAMPLE'
-[2025-11-21 14:53:41] [INFO] Connected: SAMPLE
-+ echo '[2025-11-21 14:53:41] [INFO] Connected: SAMPLE'
++ local 'msg=[2025-11-21 15:00:24] [INFO] Connected: SAMPLE'
++ echo '[2025-11-21 15:00:24] [INFO] Connected: SAMPLE'
+[2025-11-21 15:00:24] [INFO] Connected: SAMPLE
++ echo '[2025-11-21 15:00:24] [INFO] Connected: SAMPLE'
 + verify_db_rights
 + log INFO 'Verifying backup rights...'
 + local l=INFO
 + shift
 ++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 14:53:41] [INFO] Verifying backup rights...'
-+ echo '[2025-11-21 14:53:41] [INFO] Verifying backup rights...'
-[2025-11-21 14:53:41] [INFO] Verifying backup rights...
-+ echo '[2025-11-21 14:53:41] [INFO] Verifying backup rights...'
-++ grep -v SQLSTATE
-++ head -n 1
-++ db2 'VALUES CURRENT USER'
-++ awk '{print $1}'
-++ xargs
-++ tr -d '\n\r'
-++ grep -v SQL
-++ tail -n +4
-++ grep -v '^$'
-++ grep -v '^+'
++ local 'msg=[2025-11-21 15:00:24] [INFO] Verifying backup rights...'
++ echo '[2025-11-21 15:00:24] [INFO] Verifying backup rights...'
+[2025-11-21 15:00:24] [INFO] Verifying backup rights...
++ echo '[2025-11-21 15:00:24] [INFO] Verifying backup rights...'
 + local auth_id=
+++ db2 'VALUES CURRENT USER'
++ local 'db2out=SQL1024N  A database connection does not exist.  SQLSTATE=08003'
+++ echo 'SQL1024N  A database connection does not exist.  SQLSTATE=08003'
+++ awk 'NR>3 && NF>0 && !/^[[:space:]]*$/ && !/SQL/ && !/---/ && !/record/ {print $1; exit}'
++ auth_id=
 + [[ -z '' ]]
 ++ db2 'VALUES USER'
-++ grep -v '^+'
-++ grep -v SQL
-++ head -n 1
-++ tr -d '\n\r'
-++ xargs
-++ grep -v SQLSTATE
-++ tail -n +4
-++ grep -v '^$'
-++ awk '{print $1}'
-+ auth_id=
++ db2out='SQL1024N  A database connection does not exist.  SQLSTATE=08003'
