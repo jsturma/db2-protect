@@ -1,37 +1,11 @@
-+ shift
-++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 15:31:50] [INFO] Connected: SAMPLE'
-+ echo '[2025-11-21 15:31:50] [INFO] Connected: SAMPLE'
-[2025-11-21 15:31:50] [INFO] Connected: SAMPLE
-+ echo '[2025-11-21 15:31:50] [INFO] Connected: SAMPLE'
-+ verify_db_rights
-+ log INFO 'Verifying backup rights...'
-+ local l=INFO
-+ shift
-++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 15:31:50] [INFO] Verifying backup rights...'
-+ echo '[2025-11-21 15:31:50] [INFO] Verifying backup rights...'
-[2025-11-21 15:31:50] [INFO] Verifying backup rights...
-+ echo '[2025-11-21 15:31:50] [INFO] Verifying backup rights...'
-++ db2 'SELECT 1 FROM SYSIBM.SYSDUMMY1'
-+ local 'conn_check=SQL1024N  A database connection does not exist.  SQLSTATE=08003'
-+ echo 'SQL1024N  A database connection does not exist.  SQLSTATE=08003'
-+ grep -q 'SQL1024N\|SQLSTATE=08003'
-+ log INFO 'Connection lost, reconnecting...'
-+ local l=INFO
-+ shift
-++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 15:31:51] [INFO] Connection lost, reconnecting...'
-+ echo '[2025-11-21 15:31:51] [INFO] Connection lost, reconnecting...'
-[2025-11-21 15:31:51] [INFO] Connection lost, reconnecting...
-+ echo '[2025-11-21 15:31:51] [INFO] Connection lost, reconnecting...'
-+ db2 connect to SAMPLE
-+ local auth_id=
-++ db2 'VALUES CURRENT USER'
-+ local 'db2out=SQL1024N  A database connection does not exist.  SQLSTATE=08003'
-++ echo 'SQL1024N  A database connection does not exist.  SQLSTATE=08003'
-++ awk 'NR>3 && NF>0 && !/^[[:space:]]*$/ && !/SQL/ && !/---/ && !/record/ {print $1; exit}'
-+ auth_id=
-+ [[ -z '' ]]
-++ db2 'VALUES USER'
-+ db2out='SQL1024N  A database connection does not exist.  SQLSTATE=08003'
+[root@db2 db2-protect]# su - db2inst1 -c '/opt/db2-protect/backup-db2.sh'
+[2025-11-21 15:39:56] [INFO] === DB2 Backup Started ===
+[2025-11-21 15:39:56] [INFO] DB2 user: db2inst1
+[2025-11-21 15:39:56] [INFO] DB2 found for user db2inst1
+[2025-11-21 15:39:56] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
+[2025-11-21 15:39:56] [INFO] Config: type=full path=/mnt/backup/db2 conn=local db=SAMPLE
+[2025-11-21 15:39:56] [INFO] Space: 11GB
+[2025-11-21 15:39:59] [INFO] Connected: SAMPLE
+[2025-11-21 15:39:59] [INFO] Verifying backup rights...
+[2025-11-21 15:40:00] [INFO] Auth ID: DB2INST1
+[2025-11-21 15:40:01] [WARN] Cannot query system authorities
