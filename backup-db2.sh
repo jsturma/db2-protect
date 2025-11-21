@@ -219,10 +219,34 @@ perform_backup() {
     local backup_output=$(db2 "${cmd}" 2>&1)
     local backup_status=$?
     echo "${backup_output}" >> "${LOG_FILE}"
+    # Also log output to console for debugging
+    log "INFO" "DB2 backup output: ${backup_output}"
+    
+    # Check for DB2 errors in output even if exit code is 0
+    if echo "${backup_output}" | grep -qiE "SQL[0-9]+.*error|SQLSTATE.*error|failed"; then
+        log "ERROR" "Backup command reported errors:"
+        echo "${backup_output}" | grep -iE "SQL[0-9]+|SQLSTATE|error|failed" | while read -r line; do log "ERROR" "  ${line}"; done
+        error_exit "Backup failed with DB2 errors. Check logs for details."
+    fi
+    
     if [[ ${backup_status} -eq 0 ]]; then
-        log "INFO" "Backup completed in session: ${session_dir}"
-        local bf2=$(find "${session_dir}" -type f 2>/dev/null)
-        [[ -n "${bf2}" ]] && echo "${bf2}" | while read -r f; do log "INFO" "Created: ${f} ($(du -h "${f}" | cut -f1))"; done || log "WARN" "No backup files found"
+        log "INFO" "Backup command completed successfully"
+        # Wait a moment for files to be written
+        sleep 1
+        # Look for backup files - DB2 may create files with .001, .002 extensions
+        local bf2=$(find "${session_dir}" -type f \( -name "${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}*" -o -name "*.001" -o -name "*.002" \) 2>/dev/null | head -10)
+        if [[ -n "${bf2}" ]]; then
+            log "INFO" "Backup files created in session: ${session_dir}"
+            echo "${bf2}" | while read -r f; do 
+                [[ -f "${f}" ]] && log "INFO" "  ${f} ($(du -h "${f}" 2>/dev/null | cut -f1 || echo "unknown size"))"
+            done
+        else
+            log "WARN" "No backup files found in ${session_dir}"
+            log "WARN" "Backup output: ${backup_output}"
+            log "WARN" "Checking if files were created in parent directory..."
+            local parent_files=$(find "${BACKUP_PATH}/${DB_NAME}" -maxdepth 1 -type f -name "${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}*" 2>/dev/null)
+            [[ -n "${parent_files}" ]] && log "INFO" "Found files in parent: ${parent_files}" || log "ERROR" "No backup files found anywhere"
+        fi
     else
         log "ERROR" "Backup command failed with status ${backup_status}"
         log "ERROR" "Backup output: ${backup_output}"
