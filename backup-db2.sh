@@ -203,7 +203,8 @@ perform_backup() {
     local bf="${session_dir}/${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}"
     log "INFO" "Starting ${BACKUP_TYPE} backup: ${DB_NAME} -> ${session_dir}/"
     
-    # Build backup command - DB2 syntax: BACKUP DATABASE ... TO 'path' WITH ... BUFFER ... [COMPRESS] ...
+    # Build backup command - DB2 syntax: BACKUP DATABASE ... TO 'directory' WITH ... BUFFERS ... [COMPRESS] ...
+    # Note: DB2 creates files with its own naming, so use directory path, not full filename
     local cmd="BACKUP DATABASE ${DB_NAME}"
     case "${BACKUP_TYPE}" in
         full) ;;
@@ -211,8 +212,8 @@ perform_backup() {
         delta) cmd="${cmd} INCREMENTAL DELTA" ;;
         *) error_exit "Invalid backup type: ${BACKUP_TYPE}" ;;
     esac
-    cmd="${cmd} TO '${bf}'"
-    cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM}"
+    cmd="${cmd} TO '${session_dir}'"
+    cmd="${cmd} WITH ${BUFFER_SIZE} BUFFERS PARALLELISM ${PARALLELISM}"
     [[ "${COMPRESS}" == "true" ]] && cmd="${cmd} COMPRESS"
     cmd="${cmd} WITHOUT PROMPTING"
     
@@ -234,8 +235,8 @@ perform_backup() {
         log "INFO" "Backup command completed successfully"
         # Wait a moment for files to be written
         sleep 1
-        # Look for backup files - DB2 may create files with .001, .002 extensions
-        local bf2=$(find "${session_dir}" -type f \( -name "${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}*" -o -name "*.001" -o -name "*.002" \) 2>/dev/null | head -10)
+        # Look for backup files - DB2 creates files with its own naming (usually .001, .002, etc.)
+        local bf2=$(find "${session_dir}" -type f \( -name "*.001" -o -name "*.002" -o -name "*.003" -o -name "${DB_NAME}.*" \) 2>/dev/null | head -10)
         if [[ -n "${bf2}" ]]; then
             log "INFO" "Backup files created in session: ${session_dir}"
             echo "${bf2}" | while read -r f; do 
