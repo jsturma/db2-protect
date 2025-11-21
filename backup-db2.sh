@@ -3,7 +3,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${SCRIPT_DIR}"
 CONFIG_FILE="${PROJECT_ROOT}/etc/backup-config.yaml"
+# Try project logs first, fallback to user home or tmp
 LOG_DIR="${PROJECT_ROOT}/logs"
+if ! mkdir -p "${LOG_DIR}" 2>/dev/null || [[ ! -w "${LOG_DIR}" ]]; then
+    LOG_DIR="${HOME:-/tmp}/db2-protect-logs"
+    mkdir -p "${LOG_DIR}" 2>/dev/null || LOG_DIR="/tmp/db2-protect-logs-$$"
+    mkdir -p "${LOG_DIR}" 2>/dev/null || { echo "ERROR: Cannot create log directory" >&2; exit 1; }
+fi
 LOG_FILE="${LOG_DIR}/db2-backup.log"
 # Generate timestamp with milliseconds for concurrent access safety
 if date +%N &>/dev/null && date +%N | grep -q '[0-9]'; then
@@ -13,9 +19,13 @@ elif command -v python3 &>/dev/null; then
 else
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)$(printf "%03d" $(($(date +%s) % 1000)))
 fi
-mkdir -p "${LOG_DIR}"
 
-log() { local l=$1; shift; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [${l}] $*" | tee -a "${LOG_FILE}"; }
+log() { 
+    local l=$1; shift
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [${l}] $*"
+    echo "${msg}"
+    echo "${msg}" >> "${LOG_FILE}" 2>/dev/null || echo "${msg}" >> "/tmp/db2-backup-$$.log" 2>/dev/null || true
+}
 error_exit() { log "ERROR" "$1"; exit "${2:-1}"; }
 
 # Determine DB2 instance owner and setup user switching if running as root
