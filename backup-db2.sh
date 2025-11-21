@@ -18,9 +18,45 @@ mkdir -p "${LOG_DIR}"
 log() { local l=$1; shift; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [${l}] $*" | tee -a "${LOG_FILE}"; }
 error_exit() { log "ERROR" "$1"; exit "${2:-1}"; }
 
+# Determine DB2 instance owner and setup user switching if running as root
+setup_db2_user() {
+    local current_user=$(whoami)
+    if [[ "${current_user}" == "root" ]]; then
+        log "INFO" "Running as root, detecting DB2 instance owner..."
+        if [[ -n "${DB_INSTANCE}" ]]; then
+            DB2_USER="${DB_INSTANCE}"
+        else
+            # Try to detect from DB2INSTANCE env or common locations
+            DB2_USER="${DB2INSTANCE:-}"
+            [[ -z "${DB2_USER}" ]] && {
+                # Check common DB2 instance owners
+                for u in db2inst1 db2fenc1 db2inst db2admin; do
+                    id "${u}" &>/dev/null && { DB2_USER="${u}"; break; }
+                done
+            }
+        fi
+        [[ -z "${DB2_USER}" ]] && error_exit "Cannot determine DB2 instance owner. Set db_instance in config or DB2INSTANCE env"
+        log "INFO" "Will run DB2 commands as user: ${DB2_USER}"
+        # Function to run DB2 commands as instance owner
+        db2_cmd() {
+            su - "${DB2_USER}" -c "source ~${DB2_USER}/sqllib/db2profile 2>/dev/null || source /opt/ibm/db2/V*/db2profile 2>/dev/null; $*"
+        }
+    else
+        DB2_USER="${current_user}"
+        db2_cmd() { eval "$*"; }
+    fi
+    log "INFO" "DB2 user: ${DB2_USER}"
+}
+
 check_db2() {
-    command -v db2 &> /dev/null || error_exit "DB2 command not found"
-    log "INFO" "DB2 found: $(which db2)"
+    if [[ "${DB2_USER}" == "root" ]] || [[ -z "${DB2_USER}" ]]; then
+        command -v db2 &> /dev/null || error_exit "DB2 command not found"
+        log "INFO" "DB2 found: $(which db2)"
+    else
+        # Check if DB2 is available for the instance owner
+        db2_cmd "command -v db2" &> /dev/null || error_exit "DB2 command not found for user ${DB2_USER}"
+        log "INFO" "DB2 found for user ${DB2_USER}"
+    fi
 }
 
 parse_yaml() {
@@ -79,27 +115,27 @@ connect_db2() {
 
 connect_local() {
     [[ -n "${DB_INSTANCE}" ]] && export DB2INSTANCE="${DB_INSTANCE}"
-    db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
+    db2_cmd "db2 connect to ${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
     log "INFO" "Connected: ${DB_NAME}"
 }
 
 connect_external_client() {
     log "INFO" "Connecting as external client..."
     if [[ "${CONNECTION_TYPE}" == "cataloged" ]]; then
-        [[ -n "${DB_USER}" ]] && [[ -n "${DB_PASSWORD}" ]] && db2 connect to "${DB_NAME}" user "${DB_USER}" using "${DB_PASSWORD}" > /dev/null 2>&1 ||
-        [[ -n "${DB_USER}" ]] && db2 connect to "${DB_NAME}" user "${DB_USER}" > /dev/null 2>&1 ||
-        db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
+        [[ -n "${DB_USER}" ]] && [[ -n "${DB_PASSWORD}" ]] && db2_cmd "db2 connect to ${DB_NAME} user ${DB_USER} using ${DB_PASSWORD}" > /dev/null 2>&1 ||
+        [[ -n "${DB_USER}" ]] && db2_cmd "db2 connect to ${DB_NAME} user ${DB_USER}" > /dev/null 2>&1 ||
+        db2_cmd "db2 connect to ${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
         log "INFO" "Connected (cataloged): ${DB_NAME}"
     elif [[ "${CONNECTION_TYPE}" == "non-cataloged" ]] || [[ -n "${DB_HOST}" ]]; then
         [[ -n "${DB_HOST}" ]] || error_exit "db_host required"
         local tn="TEMP_NODE_$$" td="TEMP_DB_$$"
-        db2 "catalog tcpip node ${tn} remote ${DB_HOST} server ${DB_PORT}" > /dev/null 2>&1 || error_exit "Failed to catalog node: ${DB_HOST}:${DB_PORT}"
-        db2 "catalog database ${DB_NAME} as ${td} at node ${tn}" > /dev/null 2>&1 || { db2 "uncatalog node ${tn}" > /dev/null 2>&1; error_exit "Failed to catalog DB: ${DB_NAME}"; }
+        db2_cmd "db2 \"catalog tcpip node ${tn} remote ${DB_HOST} server ${DB_PORT}\"" > /dev/null 2>&1 || error_exit "Failed to catalog node: ${DB_HOST}:${DB_PORT}"
+        db2_cmd "db2 \"catalog database ${DB_NAME} as ${td} at node ${tn}\"" > /dev/null 2>&1 || { db2_cmd "db2 \"uncatalog node ${tn}\"" > /dev/null 2>&1; error_exit "Failed to catalog DB: ${DB_NAME}"; }
         if [[ -n "${DB_USER}" ]]; then
-            [[ -n "${DB_PASSWORD}" ]] && db2 connect to "${td}" user "${DB_USER}" using "${DB_PASSWORD}" > /dev/null 2>&1 ||
-            db2 connect to "${td}" user "${DB_USER}" > /dev/null 2>&1 || { db2 "uncatalog database ${td}" > /dev/null 2>&1; db2 "uncatalog node ${tn}" > /dev/null 2>&1; error_exit "Failed to connect: ${DB_NAME}"; }
+            [[ -n "${DB_PASSWORD}" ]] && db2_cmd "db2 connect to ${td} user ${DB_USER} using ${DB_PASSWORD}" > /dev/null 2>&1 ||
+            db2_cmd "db2 connect to ${td} user ${DB_USER}" > /dev/null 2>&1 || { db2_cmd "db2 \"uncatalog database ${td}\"" > /dev/null 2>&1; db2_cmd "db2 \"uncatalog node ${tn}\"" > /dev/null 2>&1; error_exit "Failed to connect: ${DB_NAME}"; }
         else
-            db2 connect to "${td}" > /dev/null 2>&1 || { db2 "uncatalog database ${td}" > /dev/null 2>&1; db2 "uncatalog node ${tn}" > /dev/null 2>&1; error_exit "Failed to connect: ${DB_NAME}"; }
+            db2_cmd "db2 connect to ${td}" > /dev/null 2>&1 || { db2_cmd "db2 \"uncatalog database ${td}\"" > /dev/null 2>&1; db2_cmd "db2 \"uncatalog node ${tn}\"" > /dev/null 2>&1; error_exit "Failed to connect: ${DB_NAME}"; }
         fi
         TEMP_NODE="${tn}"
         TEMP_DB="${td}"
@@ -111,14 +147,14 @@ connect_external_client() {
 
 verify_db_rights() {
     log "INFO" "Verifying backup rights..."
-    local auth_id=$(db2 "VALUES CURRENT USER" 2>&1 | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
-    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] && auth_id=$(db2 "VALUES USER" 2>&1 | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
-    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] && { auth_id="${USER:-$(whoami)}"; log "WARN" "Using fallback auth: ${auth_id}"; } || log "INFO" "Auth ID: ${auth_id}"
+    local auth_id=$(db2_cmd "db2 \"VALUES CURRENT USER\"" 2>&1 | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
+    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] && auth_id=$(db2_cmd "db2 \"VALUES USER\"" 2>&1 | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
+    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] && { auth_id="${DB2_USER}"; log "WARN" "Using fallback auth: ${auth_id}"; } || log "INFO" "Auth ID: ${auth_id}"
     local has_sys=false has_dbadm=false has_backup=false errs=0
-    local sq=$(db2 "SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T" 2>&1)
+    local sq=$(db2_cmd "db2 \"SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T\"" 2>&1)
     echo "${sq}" | grep -qiE "(SYSADM|SYSCTRL|SYSMAINT)" && { has_sys=true; log "INFO" "System authority: $(echo "${sq}" | grep -iE "(SYSADM|SYSCTRL|SYSMAINT)" | head -1 | xargs)"; } ||
     echo "${sq}" | grep -q "SQLSTATE" && { log "WARN" "Cannot query system authorities"; ((errs++)); }
-    local dq=$(db2 "SELECT GRANTEE,GRANTEETYPE,DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'" 2>&1)
+    local dq=$(db2_cmd "db2 \"SELECT GRANTEE,GRANTEETYPE,DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'\"" 2>&1)
     if ! echo "${dq}" | grep -q "SQLSTATE"; then
         local dl=$(echo "${dq}" | grep -i "${auth_id}" | head -1)
         [[ -n "${dl}" ]] && {
@@ -129,7 +165,7 @@ verify_db_rights() {
         ((errs++))
     fi
     [[ "${has_sys}" == "false" ]] && [[ "${has_dbadm}" == "false" ]] && [[ "${has_backup}" == "false" ]] && {
-        local ac=$(db2 "SELECT COUNT(*) FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}' AND (DBADMAUTH='Y' OR BACKUPAUTH='Y')" 2>&1)
+        local ac=$(db2_cmd "db2 \"SELECT COUNT(*) FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}' AND (DBADMAUTH='Y' OR BACKUPAUTH='Y')\"" 2>&1)
         local cnt=$(echo "${ac}" | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
         [[ "${cnt}" =~ ^[0-9]+$ ]] && [[ "${cnt}" -gt 0 ]] && { has_dbadm=true; log "INFO" "Authority detected (alt method)"; }
     }
@@ -156,7 +192,7 @@ perform_backup() {
     [[ "${COMPRESS}" == "true" ]] && cmd="${cmd} COMPRESS"
     cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM} WITHOUT PROMPTING"
     log "INFO" "Executing: db2 ${cmd}"
-    if db2 "${cmd}" >> "${LOG_FILE}" 2>&1; then
+    if db2_cmd "db2 \"${cmd}\"" >> "${LOG_FILE}" 2>&1; then
         log "INFO" "Backup completed in session: ${session_dir}"
         local bf2=$(find "${session_dir}" -type f)
         [[ -n "${bf2}" ]] && echo "${bf2}" | while read -r f; do log "INFO" "Created: ${f} ($(du -h "${f}" | cut -f1))"; done || log "WARN" "No backup files found"
@@ -168,10 +204,10 @@ perform_backup() {
 
 disconnect_db2() {
     log "INFO" "Disconnecting..."
-    db2 terminate > /dev/null 2>&1
+    db2_cmd "db2 terminate" > /dev/null 2>&1
     [[ -n "${TEMP_DB:-}" ]] && [[ -n "${TEMP_NODE:-}" ]] && {
-        db2 "uncatalog database ${TEMP_DB}" > /dev/null 2>&1
-        db2 "uncatalog node ${TEMP_NODE}" > /dev/null 2>&1
+        db2_cmd "db2 \"uncatalog database ${TEMP_DB}\"" > /dev/null 2>&1
+        db2_cmd "db2 \"uncatalog node ${TEMP_NODE}\"" > /dev/null 2>&1
         log "INFO" "Cleaned up temp catalog"
     }
 }
@@ -188,6 +224,7 @@ cleanup_old_backups() {
 
 main() {
     log "INFO" "=== DB2 Backup Started ==="
+    setup_db2_user
     check_db2
     load_config
     check_mount_point "${BACKUP_PATH}"
