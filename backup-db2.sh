@@ -93,9 +93,11 @@ load_config() {
     DB_USER="${config_db_user:-}"
     DB_PASSWORD="${config_db_password:-}"
     [[ -n "${BACKUP_PATH}" ]] || error_exit "backup_path not specified"
-    if [[ "${CONNECTION_TYPE}" != "local" ]] || [[ -n "${DB_HOST}" ]]; then
+    if [[ "${CONNECTION_TYPE}" != "local" ]]; then
         IS_EXTERNAL_CLIENT=true
-        [[ -n "${DB_HOST}" ]] || [[ "${CONNECTION_TYPE}" == "cataloged" ]] || error_exit "db_host required for non-cataloged"
+        if [[ "${CONNECTION_TYPE}" == "non-cataloged" ]]; then
+            [[ -n "${DB_HOST}" ]] || error_exit "db_host required for non-cataloged connections"
+        fi
     else
         IS_EXTERNAL_CLIENT=false
     fi
