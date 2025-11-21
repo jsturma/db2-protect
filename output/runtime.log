@@ -1,23 +1,24 @@
 [root@db2 db2-protect]# su - db2inst1 -c '/opt/db2-protect/backup-db2.sh'
-[2025-11-21 15:51:40] [INFO] === DB2 Backup Started ===
-[2025-11-21 15:51:40] [INFO] DB2 user: db2inst1
-[2025-11-21 15:51:40] [INFO] DB2 found for user db2inst1
-[2025-11-21 15:51:40] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
-[2025-11-21 15:51:40] [INFO] Config: type=full path=/mnt/backup/db2 conn=local db=SAMPLE
-[2025-11-21 15:51:40] [INFO] Space: 11GB
-[2025-11-21 15:51:42] [INFO] Connected: SAMPLE
-[2025-11-21 15:51:42] [INFO] Verifying backup rights...
-[2025-11-21 15:51:44] [INFO] Auth ID: DB2INST1
-[2025-11-21 15:51:45] [WARN] Cannot verify rights (connection issue) - proceeding (DB2 will validate during backup)
-[2025-11-21 15:51:45] [INFO] Ensuring database connection...
-[2025-11-21 15:51:45] [INFO] Starting full backup: SAMPLE -> /mnt/backup/db2/SAMPLE/20251121_155140390/
-[2025-11-21 15:51:45] [INFO] Executing: db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_155140390/SAMPLE_full_20251121_155140390' COMPRESS WITH 1024 BUFFER PARALLELISM 4 WITHOUT PROMPTING"
-[2025-11-21 15:51:46] [INFO] DB2 backup output: SQL0104N  An unexpected token "WITH" was found following "COMPRESS".  Expected
-tokens may include:  "INCLUDE".  SQLSTATE=42601
-[2025-11-21 15:51:46] [INFO] Backup command completed successfully
-[2025-11-21 15:51:47] [WARN] No backup files found in /mnt/backup/db2/SAMPLE/20251121_155140390
-[2025-11-21 15:51:47] [WARN] Backup output: SQL0104N  An unexpected token "WITH" was found following "COMPRESS".  Expected
-tokens may include:  "INCLUDE".  SQLSTATE=42601
-[2025-11-21 15:51:47] [WARN] Checking if files were created in parent directory...
-[2025-11-21 15:51:47] [ERROR] No backup files found anywhere
-[2025-11-21 15:51:47] [INFO] Disconnecting...
+[2025-11-21 15:55:10] [INFO] === DB2 Backup Started ===
+[2025-11-21 15:55:10] [INFO] DB2 user: db2inst1
+[2025-11-21 15:55:10] [INFO] DB2 found for user db2inst1
+[2025-11-21 15:55:10] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
+[2025-11-21 15:55:10] [INFO] Config: type=full path=/mnt/backup/db2 conn=local db=SAMPLE
+[2025-11-21 15:55:10] [INFO] Space: 11GB
+[2025-11-21 15:55:11] [INFO] Connected: SAMPLE
+[2025-11-21 15:55:11] [INFO] Verifying backup rights...
+[2025-11-21 15:55:14] [INFO] Auth ID: DB2INST1
+[2025-11-21 15:55:15] [WARN] Cannot verify rights (connection issue) - proceeding (DB2 will validate during backup)
+[2025-11-21 15:55:15] [INFO] Ensuring database connection...
+[2025-11-21 15:55:15] [INFO] Starting full backup: SAMPLE -> /mnt/backup/db2/SAMPLE/20251121_155510007/
+[2025-11-21 15:55:15] [INFO] Executing: db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_155510007/SAMPLE_full_20251121_155510007' WITH 1024 BUFFER PARALLELISM 4 COMPRESS WITHOUT PROMPTING"
+[2025-11-21 15:55:16] [INFO] DB2 backup output: SQL0104N  An unexpected token "BUFFER" was found following "<identifier>".
+Expected tokens may include:  "BUFFERS".  SQLSTATE=42601
+[2025-11-21 15:55:16] [INFO] Backup command completed successfully
+[2025-11-21 15:55:17] [WARN] No backup files found in /mnt/backup/db2/SAMPLE/20251121_155510007
+[2025-11-21 15:55:17] [WARN] Backup output: SQL0104N  An unexpected token "BUFFER" was found following "<identifier>".
+Expected tokens may include:  "BUFFERS".  SQLSTATE=42601
+[2025-11-21 15:55:17] [WARN] Checking if files were created in parent directory...
+[2025-11-21 15:55:17] [ERROR] No backup files found anywhere
+[2025-11-21 15:55:17] [INFO] Disconnecting...
+[root@db2 db2-protect]#
