@@ -1,24 +1,38 @@
-[root@db2 db2-protect]# su - db2inst1 -c '/opt/db2-protect/backup-db2.sh'
-[2025-11-21 16:03:26] [INFO] === DB2 Backup Started ===
-[2025-11-21 16:03:26] [INFO] DB2 user: db2inst1
-[2025-11-21 16:03:26] [INFO] DB2 found for user db2inst1
-[2025-11-21 16:03:26] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
-[2025-11-21 16:03:26] [INFO] Config: type=full path=/mnt/backup/db2 conn=local db=SAMPLE
-[2025-11-21 16:03:26] [INFO] Space: 11GB
-[2025-11-21 16:03:28] [INFO] Connected: SAMPLE
-[2025-11-21 16:03:28] [INFO] Verifying backup rights...
-[2025-11-21 16:03:30] [INFO] Auth ID: DB2INST1
-[2025-11-21 16:03:31] [WARN] Cannot verify rights (connection issue) - proceeding (DB2 will validate during backup)
-[2025-11-21 16:03:31] [INFO] Ensuring database connection...
-[2025-11-21 16:03:31] [INFO] Starting full backup: SAMPLE -> /mnt/backup/db2/SAMPLE/20251121_160326709/
-[2025-11-21 16:03:31] [INFO] Executing: db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_160326709' WITH 1024 BUFFERS PARALLELISM 4 COMPRESS WITHOUT PROMPTING"
-[2025-11-21 16:03:33] [INFO] DB2 backup output: SQL1035N  The operation failed because the specified database cannot be
-connected to in the mode requested.  SQLSTATE=57019
-[2025-11-21 16:03:33] [ERROR] Backup command reported errors:
-[2025-11-21 16:03:33] [ERROR]   SQL1035N  The operation failed because the specified database cannot be
-[2025-11-21 16:03:33] [ERROR]   connected to in the mode requested.  SQLSTATE=57019
-[2025-11-21 16:03:33] [ERROR] Backup failed with DB2 errors. Check logs for details.
-[root@db2 db2-protect]#
+Script output :
 
+[root@db2 db2-protect]# su - db2inst1 -c '/opt/db2-protect/backup-db2.sh'
+[2025-11-21 16:07:37] [INFO] === DB2 Backup Started ===
+[2025-11-21 16:07:37] [INFO] DB2 user: db2inst1
+[2025-11-21 16:07:37] [INFO] DB2 found for user db2inst1
+[2025-11-21 16:07:37] [INFO] Loading config: /opt/db2-protect/etc/backup-config.yaml
+[2025-11-21 16:07:37] [INFO] Config: type=full path=/mnt/backup/db2 conn=local db=SAMPLE
+[2025-11-21 16:07:37] [INFO] Space: 11GB
+[2025-11-21 16:07:40] [INFO] Connected: SAMPLE
+[2025-11-21 16:07:40] [INFO] Verifying backup rights...
+[2025-11-21 16:07:42] [INFO] Auth ID: DB2INST1
+[2025-11-21 16:07:43] [WARN] Cannot verify rights (connection issue) - proceeding (DB2 will validate during backup)
+[2025-11-21 16:07:43] [INFO] Preparing database connection for backup...
+[2025-11-21 16:07:45] [INFO] Starting full backup: SAMPLE -> /mnt/backup/db2/SAMPLE/20251121_160737919/
+[2025-11-21 16:07:45] [INFO] Executing: db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_160737919' WITH 1024 BUFFERS PARALLELISM 4 COMPRESS WITHOUT PROMPTING"
+[2025-11-21 16:07:46] [INFO] DB2 backup output: SQL1035N  The operation failed because the specified database cannot be
+connected to in the mode requested.  SQLSTATE=57019
+[2025-11-21 16:07:46] [ERROR] Backup command reported errors:
+[2025-11-21 16:07:46] [ERROR]   SQL1035N  The operation failed because the specified database cannot be
+[2025-11-21 16:07:46] [ERROR]   connected to in the mode requested.  SQLSTATE=57019
+[2025-11-21 16:07:46] [ERROR] Backup failed with DB2 errors. Check logs for details.
+
+Manual run logged as db2inst1 :
+
+[db2inst1@db2 ~]$ db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_160737919' WITH 1024 BUFFERS PARALLELISM 4 COMPRESS WITHOUT PROMPTING"
+
+Backup successful. The timestamp for this backup image is : 20251121160852
+
+[db2inst1@db2 ~]$ ls /mnt/backup/db2/SAMPLE/20251121_160737919
+SAMPLE.0.db2inst1.DBPART000.20251121160852.001
+[db2inst1@db2 ~]$ ls -ail /mnt/backup/db2/SAMPLE/20251121_160737919
+total 23720
+17154471 drwxrwxr-x. 2 db2inst1 db2inst1       60 Nov 21 16:08 .
+33589113 drwxrwxr-x. 7 db2inst1 db2inst1      136 Nov 21 16:07 ..
+17154480 -rw-------. 1 db2inst1 db2inst1 24289280 Nov 21 16:08 SAMPLE.0.db2inst1.DBPART000.20251121160852.001
 
 
