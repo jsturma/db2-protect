@@ -6,6 +6,8 @@ A comprehensive bash script for backing up DB2 databases to NFS or local mount p
 
 - ✅ Supports NFS and local mount points
 - ✅ **External client support** - Backup from remote DB2 clients
+- ✅ **Timestamped session directories** - Each backup session in its own subdirectory
+- ✅ **Millisecond-precision timestamps** - Prevents file overwrites during concurrent backups
 - ✅ Automatic mount point verification
 - ✅ **Database rights verification** - Checks backup permissions before attempting backup
 - ✅ Configurable via YAML configuration file
@@ -113,15 +115,34 @@ make help
 
 ## Backup Location
 
-Backups are stored in:
+Backups are organized in timestamped session directories to prevent file overwrites and enable concurrent backups:
+
 ```
-{backup_path}/{db_name}/{db_name}_{backup_type}_{timestamp}*
+{backup_path}/{db_name}/{timestamp}/
 ```
 
-Example:
+Each backup session creates its own subdirectory with a millisecond-precision timestamp (format: `YYYYMMDD_HHMMSSmmm`).
+
+**Structure:**
 ```
-/mnt/backup/db2/SAMPLE/SAMPLE_full_20240115_143022.001
+{backup_path}/{db_name}/{timestamp}/{db_name}_{backup_type}_{timestamp}.001
+{backup_path}/{db_name}/{timestamp}/{db_name}_{backup_type}_{timestamp}.002
+...
 ```
+
+**Example:**
+```
+/mnt/backup/db2/SAMPLE/20241121_114530123/
+├── SAMPLE_full_20241121_114530123.001
+├── SAMPLE_full_20241121_114530123.002
+└── SAMPLE_full_20241121_114530123.003
+```
+
+**Benefits:**
+- **Concurrent-safe**: Millisecond precision prevents collisions when multiple backups run simultaneously
+- **Session isolation**: Each backup session is completely isolated in its own directory
+- **Easy management**: Entire sessions can be moved, archived, or deleted as a unit
+- **No overwrites**: Files from different backup sessions never conflict
 
 ## Logging
 
@@ -133,6 +154,7 @@ All backup operations are logged to:
 The log includes:
 - Configuration details
 - Mount point verification
+- Backup session directory creation
 - Backup progress
 - File sizes and locations
 - Errors and warnings
@@ -297,6 +319,12 @@ retention_days: 7
 - Reduce retention period
 - Use compression to save space
 
+### Backup session organization
+- Each backup creates a timestamped subdirectory (e.g., `20241121_114530123/`)
+- Timestamps include milliseconds to prevent concurrent backup collisions
+- Entire session directories are removed during cleanup (not individual files)
+- To manually clean up, remove entire timestamped subdirectories under `{backup_path}/{db_name}/`
+
 ### External client connection issues
 - Verify network connectivity: `ping <db_host>` and `telnet <db_host> <db_port>`
 - Check DB2 server is accepting connections
@@ -307,7 +335,48 @@ retention_days: 7
 - Ensure backup path exists on DB2 server, not client
 - Verify user credentials and permissions
 
+## Backup Session Management
+
+### Session Structure
+
+Each backup execution creates a unique session directory with the following characteristics:
+
+- **Timestamp Format**: `YYYYMMDD_HHMMSSmmm` (includes milliseconds)
+  - Example: `20241121_114530123` (November 21, 2024 at 11:45:30.123)
+- **Directory Path**: `{backup_path}/{db_name}/{timestamp}/`
+- **File Naming**: `{db_name}_{backup_type}_{timestamp}.{sequence}`
+  - Sequence numbers (.001, .002, etc.) are assigned by DB2 for multi-file backups
+
+### Concurrent Backups
+
+The script supports concurrent backup operations safely:
+
+- Multiple backups of the same database can run simultaneously
+- Each backup gets its own unique timestamped directory
+- Millisecond precision ensures no directory name collisions
+- Files from different sessions never overwrite each other
+
+### Cleanup Behavior
+
+The automatic cleanup process:
+
+- Removes **entire session directories** older than the retention period
+- Preserves session integrity (all files in a session are kept or removed together)
+- Runs after each successful backup
+- Respects the `retention_days` configuration setting
+
+**Manual Cleanup Example:**
+```bash
+# Remove a specific backup session
+rm -rf /mnt/backup/db2/SAMPLE/20241121_114530123/
+
+# Remove all sessions older than 7 days
+find /mnt/backup/db2/SAMPLE -maxdepth 1 -type d -mtime +7 -exec rm -rf {} +
+```
+
 ## License
 
 This script is provided as-is for DB2 database backup operations.
+
+See [LICENSE](LICENSE) file for details.
 

@@ -1,0 +1,58 @@
+# Logs
+logs/
+*.log
+
+# Database files
+db/
+*.db
+*.sqlite
+*.sqlite3
+
+# Backup files
+*.001
+*.002
+*.bak
+backup/
+
+# Configuration (keep example, ignore actual config with secrets)
+etc/backup-config.yaml
+!etc/backup-config.yaml.example
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+*.sublime-*
+
+# Temporary files
+*.tmp
+*.temp
+TEMP_*
+tmp/
+
+# Build artifacts
+*.o
+*.a
+*.so
+bin/
+pkg/
+
+# Test files
+*.test
+coverage/
+
+# Environment files
+.env
+.env.local
+

@@ -5,7 +5,14 @@ PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CONFIG_FILE="${PROJECT_ROOT}/etc/backup-config.yaml"
 LOG_DIR="${PROJECT_ROOT}/logs"
 LOG_FILE="${LOG_DIR}/db2-backup.log"
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+# Generate timestamp with milliseconds for concurrent access safety
+if date +%N &>/dev/null && date +%N | grep -q '[0-9]'; then
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)$(date +%N | head -c 3)
+elif command -v python3 &>/dev/null; then
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)$(python3 -c "import time; print(f'{int(time.time()*1000)%1000000:06d}'[-3:])" 2>/dev/null || echo $(($$ % 1000)))
+else
+    TIMESTAMP=$(date +%Y%m%d_%H%M%S)$(printf "%03d" $(($(date +%s) % 1000)))
+fi
 mkdir -p "${LOG_DIR}"
 
 log() { local l=$1; shift; echo "[$(date '+%Y-%m-%d %H:%M:%S')] [${l}] $*" | tee -a "${LOG_FILE}"; }
@@ -133,9 +140,11 @@ verify_db_rights() {
 }
 
 perform_backup() {
-    local bd="${BACKUP_PATH}/${DB_NAME}" bf="${bd}/${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}"
-    mkdir -p "${bd}"
-    log "INFO" "Starting ${BACKUP_TYPE} backup: ${DB_NAME} -> ${bf}"
+    # Create timestamped subdirectory for this backup session
+    local session_dir="${BACKUP_PATH}/${DB_NAME}/${TIMESTAMP}"
+    mkdir -p "${session_dir}"
+    local bf="${session_dir}/${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}"
+    log "INFO" "Starting ${BACKUP_TYPE} backup: ${DB_NAME} -> ${session_dir}/"
     local cmd="BACKUP DATABASE ${DB_NAME}"
     case "${BACKUP_TYPE}" in
         full) ;;
@@ -148,8 +157,8 @@ perform_backup() {
     cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM} WITHOUT PROMPTING"
     log "INFO" "Executing: db2 ${cmd}"
     if db2 "${cmd}" >> "${LOG_FILE}" 2>&1; then
-        log "INFO" "Backup completed"
-        local bf2=$(find "${bd}" -name "${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}*" -type f)
+        log "INFO" "Backup completed in session: ${session_dir}"
+        local bf2=$(find "${session_dir}" -type f)
         [[ -n "${bf2}" ]] && echo "${bf2}" | while read -r f; do log "INFO" "Created: ${f} ($(du -h "${f}" | cut -f1))"; done || log "WARN" "No backup files found"
     else
         error_exit "Backup failed"
@@ -170,8 +179,9 @@ disconnect_db2() {
 cleanup_old_backups() {
     local rd="${config_retention_days:-30}"
     [[ -n "${rd}" ]] && [[ "${rd}" -gt 0 ]] && {
-        log "INFO" "Cleaning backups older than ${rd} days"
-        find "${BACKUP_PATH}/${DB_NAME}" -type f -name "${DB_NAME}_*" -mtime +${rd} -delete
+        log "INFO" "Cleaning backup sessions older than ${rd} days"
+        # Remove entire timestamped subdirectories older than retention period
+        find "${BACKUP_PATH}/${DB_NAME}" -maxdepth 1 -type d -mtime +${rd} -exec rm -rf {} + 2>/dev/null || true
         log "INFO" "Cleanup done"
     }
 }
