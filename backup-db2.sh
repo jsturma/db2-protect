@@ -130,7 +130,7 @@ connect_db2() {
 
 connect_local() {
     [[ -n "${DB_INSTANCE}" ]] && export DB2INSTANCE="${DB_INSTANCE}"
-    db2_cmd "db2 connect to ${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
+    db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
     log "INFO" "Connected: ${DB_NAME}"
 }
 
@@ -162,10 +162,17 @@ connect_external_client() {
 
 verify_db_rights() {
     log "INFO" "Verifying backup rights..."
-    local auth_id=$(db2 "VALUES CURRENT USER" 2>&1 | grep -v "^$" | grep -v "^+" | grep -v "SQLSTATE" | grep -v "SQL" | tail -n +4 | head -n 1 | awk '{print $1}' | xargs | tr -d '\n\r')
-    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && {
-        auth_id=$(db2 "VALUES USER" 2>&1 | grep -v "^$" | grep -v "^+" | grep -v "SQLSTATE" | grep -v "SQL" | tail -n +4 | head -n 1 | awk '{print $1}' | xargs | tr -d '\n\r')
+    # Get auth ID - try multiple methods to parse DB2 output
+    local auth_id=""
+    # Method 1: VALUES CURRENT USER
+    local db2out=$(db2 "VALUES CURRENT USER" 2>&1)
+    auth_id=$(echo "${db2out}" | awk 'NR>3 && NF>0 && !/^[[:space:]]*$/ && !/SQL/ && !/---/ && !/record/ {print $1; exit}')
+    # Method 2: VALUES USER if first failed
+    [[ -z "${auth_id}" ]] && {
+        db2out=$(db2 "VALUES USER" 2>&1)
+        auth_id=$(echo "${db2out}" | awk 'NR>3 && NF>0 && !/^[[:space:]]*$/ && !/SQL/ && !/---/ && !/record/ {print $1; exit}')
     }
+    # Method 3: Use DB2_USER as fallback
     [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && { auth_id="${DB2_USER}"; log "WARN" "Using fallback auth: ${auth_id}"; } || log "INFO" "Auth ID: ${auth_id}"
     local has_sys=false has_dbadm=false has_backup=false errs=0
     local sq=$(db2 "SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T" 2>&1)
