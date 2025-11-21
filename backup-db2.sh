@@ -53,7 +53,12 @@ setup_db2_user() {
         }
     else
         DB2_USER="${current_user}"
-        db2_cmd() { eval "$*"; }
+        # Source DB2 profile if available, then execute command
+        db2_cmd() {
+            local cmd="$*"
+            source ~${DB2_USER}/sqllib/db2profile 2>/dev/null || source /opt/ibm/db2/V*/db2profile 2>/dev/null || true
+            eval "${cmd}"
+        }
     fi
     log "INFO" "DB2 user: ${DB2_USER}"
 }
