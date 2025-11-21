@@ -206,6 +206,12 @@ verify_db_rights() {
 }
 
 perform_backup() {
+    # Ensure connection is active before backup
+    local conn_check=$(db2 "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
+    if echo "${conn_check}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
+        log "INFO" "Connection lost, reconnecting before backup..."
+        db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to reconnect: ${DB_NAME}"
+    fi
     # Create timestamped subdirectory for this backup session
     local session_dir="${BACKUP_PATH}/${DB_NAME}/${TIMESTAMP}"
     mkdir -p "${session_dir}"
@@ -221,13 +227,18 @@ perform_backup() {
     cmd="${cmd} TO '${bf}'"
     [[ "${COMPRESS}" == "true" ]] && cmd="${cmd} COMPRESS"
     cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM} WITHOUT PROMPTING"
-    log "INFO" "Executing: db2 ${cmd}"
-    if db2 "${cmd}" >> "${LOG_FILE}" 2>&1; then
+    log "INFO" "Executing: db2 \"${cmd}\""
+    local backup_output=$(db2 "${cmd}" 2>&1)
+    local backup_status=$?
+    echo "${backup_output}" >> "${LOG_FILE}"
+    if [[ ${backup_status} -eq 0 ]]; then
         log "INFO" "Backup completed in session: ${session_dir}"
-        local bf2=$(find "${session_dir}" -type f)
+        local bf2=$(find "${session_dir}" -type f 2>/dev/null)
         [[ -n "${bf2}" ]] && echo "${bf2}" | while read -r f; do log "INFO" "Created: ${f} ($(du -h "${f}" | cut -f1))"; done || log "WARN" "No backup files found"
     else
-        error_exit "Backup failed"
+        log "ERROR" "Backup command failed with status ${backup_status}"
+        log "ERROR" "Backup output: ${backup_output}"
+        error_exit "Backup failed. Check logs for details."
     fi
     disconnect_db2
 }
