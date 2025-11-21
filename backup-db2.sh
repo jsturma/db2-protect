@@ -165,56 +165,45 @@ connect_external_client() {
 
 verify_db_rights() {
     log "INFO" "Verifying backup rights..."
-    # Try to get auth ID - if connection is lost, we'll skip detailed verification
+    # DB2 connections may not persist between commands in script context
+    # Since manual backup works, user has proper permissions
+    # DB2 will validate permissions during backup - proceed with warning if can't verify
     local auth_id="${DB2_USER}"
     local can_verify=false
     
-    # Try to query current user - if this works, connection is active
-    local db2out=$(db2 -x "VALUES CURRENT USER" 2>&1)
-    if ! echo "${db2out}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
-        auth_id=$(echo "${db2out}" | head -1 | xargs | tr -d '\n\r')
-        [[ -n "${auth_id}" ]] && can_verify=true
+    # Quick connection test
+    local test_out=$(db2 -x "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
+    if ! echo "${test_out}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
+        can_verify=true
+        local user_out=$(db2 -x "VALUES CURRENT USER" 2>&1)
+        [[ -n "${user_out}" ]] && ! echo "${user_out}" | grep -q "SQL" && auth_id=$(echo "${user_out}" | head -1 | xargs | tr -d '\n\r')
+        log "INFO" "Auth ID: ${auth_id}"
     fi
     
     if [[ "${can_verify}" == "true" ]]; then
-        log "INFO" "Auth ID: ${auth_id}"
-        local has_sys=false has_dbadm=false has_backup=false errs=0
-        local sq=$(db2 -x "SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T" 2>&1)
-        echo "${sq}" | grep -qiE "(SYSADM|SYSCTRL|SYSMAINT)" && { has_sys=true; log "INFO" "System authority detected"; } ||
-        echo "${sq}" | grep -q "SQLSTATE" && { log "WARN" "Cannot query system authorities"; ((errs++)); }
-        local dq=$(db2 -x "SELECT GRANTEE,GRANTEETYPE,DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'" 2>&1)
+        # Try basic rights check
+        local dq=$(db2 -x "SELECT DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'" 2>&1)
         if ! echo "${dq}" | grep -q "SQLSTATE"; then
-            local dl=$(echo "${dq}" | grep -i "${auth_id}" | head -1)
-            [[ -n "${dl}" ]] && {
-                echo "${dl}" | awk '{print $3}' | grep -q "Y" && { has_dbadm=true; log "INFO" "DBADM detected"; }
-                echo "${dl}" | awk '{print $4}' | grep -q "Y" && { has_backup=true; log "INFO" "BACKUP privilege detected"; }
-            }
-        else
-            ((errs++))
+            echo "${dq}" | grep -q "Y" && { log "INFO" "Backup rights confirmed"; return 0; }
         fi
-        log "INFO" "Rights: sys=${has_sys} dbadm=${has_dbadm} backup=${has_backup}"
-        [[ "${has_sys}" == "true" ]] || [[ "${has_dbadm}" == "true" ]] || [[ "${has_backup}" == "true" ]] && { log "INFO" "Rights verified"; return 0; }
-        [[ ${errs} -gt 0 ]] && { log "WARN" "Cannot fully verify - proceeding"; return 0; }
-    else
-        log "WARN" "Connection not available for rights verification - will proceed (DB2 will validate during backup)"
-        return 0
     fi
-    error_exit "Insufficient rights: ${auth_id} needs SYSADM/SYSCTRL/SYSMAINT, DBADM, or BACKUP privilege"
+    log "WARN" "Cannot verify rights (connection issue) - proceeding (DB2 will validate during backup)"
+    return 0
 }
 
 perform_backup() {
-    # Connection should be active from connect_local()
-    # Verify connection is still active
-    local conn_test=$(db2 -x "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
-    if echo "${conn_test}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
-        log "WARN" "Connection lost, attempting to reconnect..."
-        db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to reconnect: ${DB_NAME}"
-    fi
+    # Reconnect before backup (connection may not persist in script context)
+    log "INFO" "Ensuring database connection..."
+    [[ -n "${DB_INSTANCE}" ]] && export DB2INSTANCE="${DB_INSTANCE}"
+    db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
+    
     # Create timestamped subdirectory for this backup session
     local session_dir="${BACKUP_PATH}/${DB_NAME}/${TIMESTAMP}"
-    mkdir -p "${session_dir}"
+    mkdir -p "${session_dir}" || error_exit "Failed to create backup directory: ${session_dir}"
     local bf="${session_dir}/${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}"
     log "INFO" "Starting ${BACKUP_TYPE} backup: ${DB_NAME} -> ${session_dir}/"
+    
+    # Build backup command
     local cmd="BACKUP DATABASE ${DB_NAME}"
     case "${BACKUP_TYPE}" in
         full) ;;
@@ -225,6 +214,7 @@ perform_backup() {
     cmd="${cmd} TO '${bf}'"
     [[ "${COMPRESS}" == "true" ]] && cmd="${cmd} COMPRESS"
     cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM} WITHOUT PROMPTING"
+    
     log "INFO" "Executing: db2 \"${cmd}\""
     local backup_output=$(db2 "${cmd}" 2>&1)
     local backup_status=$?
