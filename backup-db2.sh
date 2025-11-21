@@ -203,7 +203,7 @@ perform_backup() {
     local bf="${session_dir}/${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}"
     log "INFO" "Starting ${BACKUP_TYPE} backup: ${DB_NAME} -> ${session_dir}/"
     
-    # Build backup command
+    # Build backup command - DB2 syntax: BACKUP DATABASE ... TO 'path' WITH ... BUFFER ... [COMPRESS] ...
     local cmd="BACKUP DATABASE ${DB_NAME}"
     case "${BACKUP_TYPE}" in
         full) ;;
@@ -212,8 +212,9 @@ perform_backup() {
         *) error_exit "Invalid backup type: ${BACKUP_TYPE}" ;;
     esac
     cmd="${cmd} TO '${bf}'"
+    cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM}"
     [[ "${COMPRESS}" == "true" ]] && cmd="${cmd} COMPRESS"
-    cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM} WITHOUT PROMPTING"
+    cmd="${cmd} WITHOUT PROMPTING"
     
     log "INFO" "Executing: db2 \"${cmd}\""
     local backup_output=$(db2 "${cmd}" 2>&1)
