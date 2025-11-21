@@ -29,7 +29,7 @@ db_name: SAMPLE
 # External client connection settings (optional)
 # If these are set, the script will connect as an external client
 # Leave empty or unset for local connection
-connection_type: # local, cataloged, or non-cataloged
+connection_type: local # local, cataloged, or non-cataloged
 
 # For external client connections (non-cataloged):
 # db_host: db2-server.example.com
