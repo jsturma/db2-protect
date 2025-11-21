@@ -87,7 +87,7 @@ load_config() {
     BACKUP_PATH="${config_backup_path:-}"
     DB_INSTANCE="${config_db_instance:-}"
     DB_NAME="${config_db_name:-}"
-    CONNECTION_TYPE=$(echo "${config_connection_type:-local}" | xargs | tr '[:upper:]' '[:lower:]')
+    CONNECTION_TYPE=$(echo "${config_connection_type:-local}" | sed 's/#.*$//' | xargs | tr '[:upper:]' '[:lower:]')
     DB_HOST="${config_db_host:-}"
     DB_PORT="${config_db_port:-50000}"
     DB_USER="${config_db_user:-}"
