@@ -53,12 +53,10 @@ setup_db2_user() {
         }
     else
         DB2_USER="${current_user}"
-        # Source DB2 profile if available, then execute command
-        db2_cmd() {
-            local cmd="$*"
-            source ~${DB2_USER}/sqllib/db2profile 2>/dev/null || source /opt/ibm/db2/V*/db2profile 2>/dev/null || true
-            eval "${cmd}"
-        }
+        # Source DB2 profile once at startup
+        source ~${DB2_USER}/sqllib/db2profile 2>/dev/null || source /opt/ibm/db2/V*/db2profile 2>/dev/null || true
+        # For non-root, db2 commands run directly (connection persists)
+        db2_cmd() { eval "$*"; }
     fi
     log "INFO" "DB2 user: ${DB2_USER}"
 }
@@ -164,9 +162,9 @@ connect_external_client() {
 
 verify_db_rights() {
     log "INFO" "Verifying backup rights..."
-    local auth_id=$(db2_cmd "db2 \"VALUES CURRENT USER\"" 2>&1 | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
-    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] && auth_id=$(db2_cmd "db2 \"VALUES USER\"" 2>&1 | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
-    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] && { auth_id="${DB2_USER}"; log "WARN" "Using fallback auth: ${auth_id}"; } || log "INFO" "Auth ID: ${auth_id}"
+    local auth_id=$(db2_cmd 'db2 "VALUES CURRENT USER"' 2>&1 | grep -v "^$" | grep -v "^+" | tail -n +4 | head -n 1 | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | tr -d '\n\r')
+    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && auth_id=$(db2_cmd 'db2 "VALUES USER"' 2>&1 | grep -v "^$" | grep -v "^+" | tail -n +4 | head -n 1 | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | tr -d '\n\r')
+    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && { auth_id="${DB2_USER}"; log "WARN" "Using fallback auth: ${auth_id}"; } || log "INFO" "Auth ID: ${auth_id}"
     local has_sys=false has_dbadm=false has_backup=false errs=0
     local sq=$(db2_cmd "db2 \"SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T\"" 2>&1)
     echo "${sq}" | grep -qiE "(SYSADM|SYSCTRL|SYSMAINT)" && { has_sys=true; log "INFO" "System authority: $(echo "${sq}" | grep -iE "(SYSADM|SYSCTRL|SYSMAINT)" | head -1 | xargs)"; } ||
