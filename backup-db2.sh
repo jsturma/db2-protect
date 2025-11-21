@@ -162,14 +162,16 @@ connect_external_client() {
 
 verify_db_rights() {
     log "INFO" "Verifying backup rights..."
-    local auth_id=$(db2_cmd 'db2 "VALUES CURRENT USER"' 2>&1 | grep -v "^$" | grep -v "^+" | tail -n +4 | head -n 1 | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | tr -d '\n\r')
-    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && auth_id=$(db2_cmd 'db2 "VALUES USER"' 2>&1 | grep -v "^$" | grep -v "^+" | tail -n +4 | head -n 1 | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//' | tr -d '\n\r')
+    local auth_id=$(db2 "VALUES CURRENT USER" 2>&1 | grep -v "^$" | grep -v "^+" | grep -v "SQLSTATE" | grep -v "SQL" | tail -n +4 | head -n 1 | awk '{print $1}' | xargs | tr -d '\n\r')
+    [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && {
+        auth_id=$(db2 "VALUES USER" 2>&1 | grep -v "^$" | grep -v "^+" | grep -v "SQLSTATE" | grep -v "SQL" | tail -n +4 | head -n 1 | awk '{print $1}' | xargs | tr -d '\n\r')
+    }
     [[ -z "${auth_id}" ]] || [[ "${auth_id}" =~ SQLSTATE ]] || [[ "${auth_id}" =~ ^\+ ]] && { auth_id="${DB2_USER}"; log "WARN" "Using fallback auth: ${auth_id}"; } || log "INFO" "Auth ID: ${auth_id}"
     local has_sys=false has_dbadm=false has_backup=false errs=0
-    local sq=$(db2_cmd "db2 \"SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T\"" 2>&1)
+    local sq=$(db2 "SELECT AUTHORIZATION FROM TABLE(SYSPROC.AUTH_LIST_AUTHORITIES_FOR_AUTHID('${auth_id}', 'U')) AS T" 2>&1)
     echo "${sq}" | grep -qiE "(SYSADM|SYSCTRL|SYSMAINT)" && { has_sys=true; log "INFO" "System authority: $(echo "${sq}" | grep -iE "(SYSADM|SYSCTRL|SYSMAINT)" | head -1 | xargs)"; } ||
     echo "${sq}" | grep -q "SQLSTATE" && { log "WARN" "Cannot query system authorities"; ((errs++)); }
-    local dq=$(db2_cmd "db2 \"SELECT GRANTEE,GRANTEETYPE,DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'\"" 2>&1)
+    local dq=$(db2 "SELECT GRANTEE,GRANTEETYPE,DBADMAUTH,BACKUPAUTH FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}'" 2>&1)
     if ! echo "${dq}" | grep -q "SQLSTATE"; then
         local dl=$(echo "${dq}" | grep -i "${auth_id}" | head -1)
         [[ -n "${dl}" ]] && {
@@ -180,7 +182,7 @@ verify_db_rights() {
         ((errs++))
     fi
     [[ "${has_sys}" == "false" ]] && [[ "${has_dbadm}" == "false" ]] && [[ "${has_backup}" == "false" ]] && {
-        local ac=$(db2_cmd "db2 \"SELECT COUNT(*) FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}' AND (DBADMAUTH='Y' OR BACKUPAUTH='Y')\"" 2>&1)
+        local ac=$(db2 "SELECT COUNT(*) FROM SYSCAT.DBAUTH WHERE GRANTEE='${auth_id}' AND DBNAME='${DB_NAME}' AND (DBADMAUTH='Y' OR BACKUPAUTH='Y')" 2>&1)
         local cnt=$(echo "${ac}" | grep -v "^$" | tail -n +4 | head -n 1 | xargs | tr -d '\n\r')
         [[ "${cnt}" =~ ^[0-9]+$ ]] && [[ "${cnt}" -gt 0 ]] && { has_dbadm=true; log "INFO" "Authority detected (alt method)"; }
     }
@@ -207,7 +209,7 @@ perform_backup() {
     [[ "${COMPRESS}" == "true" ]] && cmd="${cmd} COMPRESS"
     cmd="${cmd} WITH ${BUFFER_SIZE} BUFFER PARALLELISM ${PARALLELISM} WITHOUT PROMPTING"
     log "INFO" "Executing: db2 ${cmd}"
-    if db2_cmd "db2 \"${cmd}\"" >> "${LOG_FILE}" 2>&1; then
+    if db2 "${cmd}" >> "${LOG_FILE}" 2>&1; then
         log "INFO" "Backup completed in session: ${session_dir}"
         local bf2=$(find "${session_dir}" -type f)
         [[ -n "${bf2}" ]] && echo "${bf2}" | while read -r f; do log "INFO" "Created: ${f} ($(du -h "${f}" | cut -f1))"; done || log "WARN" "No backup files found"
@@ -219,10 +221,10 @@ perform_backup() {
 
 disconnect_db2() {
     log "INFO" "Disconnecting..."
-    db2_cmd "db2 terminate" > /dev/null 2>&1
+    db2 terminate > /dev/null 2>&1
     [[ -n "${TEMP_DB:-}" ]] && [[ -n "${TEMP_NODE:-}" ]] && {
-        db2_cmd "db2 \"uncatalog database ${TEMP_DB}\"" > /dev/null 2>&1
-        db2_cmd "db2 \"uncatalog node ${TEMP_NODE}\"" > /dev/null 2>&1
+        db2 "uncatalog database ${TEMP_DB}" > /dev/null 2>&1
+        db2 "uncatalog node ${TEMP_NODE}" > /dev/null 2>&1
         log "INFO" "Cleaned up temp catalog"
     }
 }
