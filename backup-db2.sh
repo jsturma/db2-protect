@@ -192,10 +192,18 @@ verify_db_rights() {
 }
 
 perform_backup() {
-    # Reconnect before backup (connection may not persist in script context)
-    log "INFO" "Ensuring database connection..."
+    # Ensure clean connection before backup
+    log "INFO" "Preparing database connection for backup..."
     [[ -n "${DB_INSTANCE}" ]] && export DB2INSTANCE="${DB_INSTANCE}"
+    # Terminate any existing connection first to avoid conflicts
+    db2 terminate > /dev/null 2>&1 || true
+    # Connect fresh for backup
     db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect: ${DB_NAME}"
+    # Verify connection is active
+    local conn_test=$(db2 -x "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
+    if echo "${conn_test}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
+        error_exit "Connection not active after connect. Check DB2 status."
+    fi
     
     # Create timestamped subdirectory for this backup session
     local session_dir="${BACKUP_PATH}/${DB_NAME}/${TIMESTAMP}"
