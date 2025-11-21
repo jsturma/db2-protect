@@ -162,6 +162,12 @@ connect_external_client() {
 
 verify_db_rights() {
     log "INFO" "Verifying backup rights..."
+    # Ensure connection is active - reconnect if needed
+    local conn_check=$(db2 "SELECT 1 FROM SYSIBM.SYSDUMMY1" 2>&1)
+    if echo "${conn_check}" | grep -q "SQL1024N\|SQLSTATE=08003"; then
+        log "INFO" "Connection lost, reconnecting..."
+        db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to reconnect: ${DB_NAME}"
+    fi
     # Get auth ID - try multiple methods to parse DB2 output
     local auth_id=""
     # Method 1: VALUES CURRENT USER
