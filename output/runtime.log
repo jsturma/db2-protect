@@ -22,3 +22,18 @@ Expected tokens may include:  "BUFFERS".  SQLSTATE=42601
 [2025-11-21 15:55:17] [ERROR] No backup files found anywhere
 [2025-11-21 15:55:17] [INFO] Disconnecting...
 [root@db2 db2-protect]#
+
+Now logs as db2inst1 :
+
+[db2inst1@db2 ~]$ db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_155510007/SAMPLE_full_20251121_155510007' WITH 1024 BUFFERS PARALLELISM 4 COMPRESS WITHOUT PROMPTING"
+SQL2036N  The path for the file, named pipe, or device
+"/mnt/backup/db2/SAMPLE/20251121_155510007/SAMPLE_full_20251121_155510" is not
+valid.
+[db2inst1@db2 ~]$ db2 "BACKUP DATABASE SAMPLE TO '/mnt/backup/db2/SAMPLE/20251121_155510007' WITH 1024 BUFFERS PARALLELISM 4 COMPRESS WITHOUT PROMPTING"
+
+Backup successful. The timestamp for this backup image is : 20251121155916
+
+[db2inst1@db2 ~]$
+
+
+
