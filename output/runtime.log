@@ -1,11 +1,3 @@
-+ shift
-++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 14:46:21] [INFO] Space: 11GB'
-+ echo '[2025-11-21 14:46:21] [INFO] Space: 11GB'
-[2025-11-21 14:46:21] [INFO] Space: 11GB
-+ echo '[2025-11-21 14:46:21] [INFO] Space: 11GB'
-+ connect_db2
-+ [[ false == \t\r\u\e ]]
 + connect_local
 + [[ -n db2inst1 ]]
 + export DB2INSTANCE=db2inst1
@@ -15,42 +7,39 @@
 + local l=INFO
 + shift
 ++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 14:46:22] [INFO] Connected: SAMPLE'
-+ echo '[2025-11-21 14:46:22] [INFO] Connected: SAMPLE'
-[2025-11-21 14:46:22] [INFO] Connected: SAMPLE
-+ echo '[2025-11-21 14:46:22] [INFO] Connected: SAMPLE'
++ local 'msg=[2025-11-21 14:53:41] [INFO] Connected: SAMPLE'
++ echo '[2025-11-21 14:53:41] [INFO] Connected: SAMPLE'
+[2025-11-21 14:53:41] [INFO] Connected: SAMPLE
++ echo '[2025-11-21 14:53:41] [INFO] Connected: SAMPLE'
 + verify_db_rights
 + log INFO 'Verifying backup rights...'
 + local l=INFO
 + shift
 ++ date '+%Y-%m-%d %H:%M:%S'
-+ local 'msg=[2025-11-21 14:46:22] [INFO] Verifying backup rights...'
-+ echo '[2025-11-21 14:46:22] [INFO] Verifying backup rights...'
-[2025-11-21 14:46:22] [INFO] Verifying backup rights...
-+ echo '[2025-11-21 14:46:22] [INFO] Verifying backup rights...'
-++ db2_cmd 'db2 "VALUES CURRENT USER"'
-++ grep -v '^$'
++ local 'msg=[2025-11-21 14:53:41] [INFO] Verifying backup rights...'
++ echo '[2025-11-21 14:53:41] [INFO] Verifying backup rights...'
+[2025-11-21 14:53:41] [INFO] Verifying backup rights...
++ echo '[2025-11-21 14:53:41] [INFO] Verifying backup rights...'
+++ grep -v SQLSTATE
 ++ head -n 1
-++ grep -v '^+'
-++ sed 's/[[:space:]]*$//'
+++ db2 'VALUES CURRENT USER'
+++ awk '{print $1}'
+++ xargs
 ++ tr -d '\n\r'
-++ sed 's/^[[:space:]]*//'
+++ grep -v SQL
 ++ tail -n +4
+++ grep -v '^$'
+++ grep -v '^+'
 + local auth_id=
 + [[ -z '' ]]
-++ db2_cmd 'db2 "VALUES USER"'
-++ grep -v '^$'
-++ tail -n +4
-++ sed 's/^[[:space:]]*//'
-++ tr -d '\n\r'
+++ db2 'VALUES USER'
 ++ grep -v '^+'
-++ sed 's/[[:space:]]*$//'
+++ grep -v SQL
 ++ head -n 1
+++ tr -d '\n\r'
+++ xargs
+++ grep -v SQLSTATE
+++ tail -n +4
+++ grep -v '^$'
+++ awk '{print $1}'
 + auth_id=
-[root@db2 db2-protect]# ls /m
-media/ mnt/
-[root@db2 db2-protect]# ls /m
-media/ mnt/
-[root@db2 db2-protect]# ls /mnt/backup/db2/
-[root@db2 db2-protect]#
-[root@db2 db2-protect]#
