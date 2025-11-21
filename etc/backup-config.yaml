@@ -1,0 +1,47 @@
+# DB2 Backup Configuration
+
+# Backup type: full, incremental, or delta
+backup_type: full
+
+# Enable compression
+compress: true
+
+# Parallelism for backup (number of parallel processes)
+parallelism: 4
+
+# Buffer size in pages (1024 = 4MB default)
+buffer_size: 1024
+
+# Backup destination path (NFS or local mount point)
+# Examples:
+#   /mnt/backup/db2          (local mount)
+#   /nfs/backup/db2          (NFS mount)
+#   /backup/db2               (local directory)
+backup_path: /mnt/backup/db2
+
+# DB2 instance name (optional, uses default if not specified)
+# Only used for local connections
+db_instance: db2inst1
+
+# Database name to backup
+db_name: SAMPLE
+
+# External client connection settings (optional)
+# If these are set, the script will connect as an external client
+# Leave empty or unset for local connection
+connection_type: local  # local, cataloged, or non-cataloged
+
+# For external client connections (non-cataloged):
+# db_host: db2-server.example.com
+# db_port: 50000
+# db_user: db2admin
+# db_password: password  # Optional - will prompt if not set
+
+# For cataloged connections, ensure database is cataloged:
+# db2 catalog tcpip node <node_name> remote <hostname> server <port>
+# db2 catalog database <db_name> at node <node_name>
+
+# Retention period in days (backups older than this will be deleted)
+# Set to 0 to disable cleanup
+retention_days: 30
+
