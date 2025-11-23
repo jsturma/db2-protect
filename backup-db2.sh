@@ -28,48 +28,24 @@ log() {
 }
 error_exit() { log "ERROR" "$1"; exit "${2:-1}"; }
 
-# Determine DB2 instance owner and setup user switching if running as root
+# Setup DB2 user - script must run as DB2 instance owner (not root)
 setup_db2_user() {
     local current_user=$(whoami)
+    # Script must not run as root
     if [[ "${current_user}" == "root" ]]; then
-        log "INFO" "Running as root, detecting DB2 instance owner..."
-        if [[ -n "${DB_INSTANCE}" ]]; then
-            DB2_USER="${DB_INSTANCE}"
-        else
-            # Try to detect from DB2INSTANCE env or common locations
-            DB2_USER="${DB2INSTANCE:-}"
-            [[ -z "${DB2_USER}" ]] && {
-                # Check common DB2 instance owners
-                for u in db2inst1 db2fenc1 db2inst db2admin; do
-                    id "${u}" &>/dev/null && { DB2_USER="${u}"; break; }
-                done
-            }
-        fi
-        [[ -z "${DB2_USER}" ]] && error_exit "Cannot determine DB2 instance owner. Set db_instance in config or DB2INSTANCE env"
-        log "INFO" "Will run DB2 commands as user: ${DB2_USER}"
-        # Function to run DB2 commands as instance owner
-        db2_cmd() {
-            su - "${DB2_USER}" -c "source ~${DB2_USER}/sqllib/db2profile 2>/dev/null || source /opt/ibm/db2/V*/db2profile 2>/dev/null; $*"
-        }
-    else
-        DB2_USER="${current_user}"
-        # Source DB2 profile once at startup
-        source ~${DB2_USER}/sqllib/db2profile 2>/dev/null || source /opt/ibm/db2/V*/db2profile 2>/dev/null || true
-        # For non-root, db2 commands run directly (connection persists)
-        db2_cmd() { eval "$*"; }
+        error_exit "This script must not run as root. Please run as the DB2 instance owner (e.g., db2inst1). Use: su - db2inst1 -c './backup-db2.sh'"
     fi
+    DB2_USER="${current_user}"
+    # Source DB2 profile once at startup
+    source ~${DB2_USER}/sqllib/db2profile 2>/dev/null || source /opt/ibm/db2/V*/db2profile 2>/dev/null || true
+    # db2 commands run directly (connection persists)
+    db2_cmd() { eval "$*"; }
     log "INFO" "DB2 user: ${DB2_USER}"
 }
 
 check_db2() {
-    if [[ "${DB2_USER}" == "root" ]] || [[ -z "${DB2_USER}" ]]; then
-        command -v db2 &> /dev/null || error_exit "DB2 command not found"
-        log "INFO" "DB2 found: $(which db2)"
-    else
-        # Check if DB2 is available for the instance owner
-        db2_cmd "command -v db2" &> /dev/null || error_exit "DB2 command not found for user ${DB2_USER}"
-        log "INFO" "DB2 found for user ${DB2_USER}"
-    fi
+    command -v db2 &> /dev/null || error_exit "DB2 command not found. Ensure DB2 is installed and PATH is set correctly."
+    log "INFO" "DB2 found for user ${DB2_USER}: $(which db2)"
 }
 
 parse_yaml() {

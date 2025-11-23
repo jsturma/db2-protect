@@ -28,6 +28,27 @@ A comprehensive bash script for backing up DB2 databases to NFS or local mount p
 
 ## Installation
 
+### Automated Deployment (Recommended)
+
+Use the deployment script to install system-wide:
+
+```bash
+# Run as root
+sudo ./deploy.sh
+
+# Or specify custom installation directory and DB2 user
+sudo INSTALL_DIR=/opt/db2-protect DB2_USER=db2inst1 ./deploy.sh
+```
+
+The deployment script will:
+- Check prerequisites (bash, DB2 user, etc.)
+- Create directory structure
+- Install all files with correct permissions
+- Create example configuration if needed
+- Verify installation
+
+### Manual Installation
+
 1. Make the script executable:
 ```bash
 chmod +x backup-db2.sh
