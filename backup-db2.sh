@@ -191,14 +191,55 @@ verify_db_rights() {
     return 0
 }
 
+check_logging_type() {
+    log "INFO" "Checking database logging configuration..."
+    [[ -n "${DB_INSTANCE}" ]] && export DB2INSTANCE="${DB_INSTANCE}"
+    db2 terminate > /dev/null 2>&1 || true
+    
+    # Connect to check logging configuration
+    db2 connect to "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to connect to check logging type: ${DB_NAME}"
+    
+    # Get logging method - check if archive logging is enabled
+    local logarch=$(db2 -x "SELECT VALUE FROM SYSIBMADM.DBCFG WHERE NAME='logarchmeth1'" 2>&1 | head -1 | xargs | tr -d '\n\r')
+    
+    # If query fails, try alternative method using db2 get db cfg
+    if [[ -z "${logarch}" ]] || echo "${logarch}" | grep -q "SQL"; then
+        local dbcfg=$(db2 get db cfg for "${DB_NAME}" 2>&1 | grep -i "logarchmeth1" | head -1 | awk -F'=' '{print $2}' | xargs | tr -d '\n\r')
+        logarch="${dbcfg}"
+    fi
+    
+    db2 terminate > /dev/null 2>&1 || true
+    
+    # If logarchmeth1 is OFF or empty, it's circular logging (offline backup required)
+    # Circular logging = Archive logging OFF = Database must be deactivated for offline backup
+    if [[ -z "${logarch}" ]] || [[ "${logarch}" == "OFF" ]] || echo "${logarch}" | grep -qiE "^$|^off$"; then
+        log "INFO" "Database uses circular logging (archive logging OFF) - database must be deactivated for offline backup"
+        return 1  # Circular logging - must deactivate database
+    else
+        log "INFO" "Database uses archive logging (${logarch}) - online backup possible"
+        return 0  # Archive logging - online backup possible
+    fi
+}
+
 perform_backup() {
     # Ensure clean connection state before backup
     log "INFO" "Preparing database connection for backup..."
     [[ -n "${DB_INSTANCE}" ]] && export DB2INSTANCE="${DB_INSTANCE}"
     # Terminate any existing connection to ensure clean state
     db2 terminate > /dev/null 2>&1 || true
-    # DB2 BACKUP can work without explicit connect, but ensure we have a clean state
-    # The backup command will handle connection internally if needed
+    
+    # Check logging type - circular logging (archive logging OFF) requires database deactivation
+    local needs_offline=false
+    local needs_deactivate=false
+    if ! check_logging_type; then
+        needs_offline=true
+        needs_deactivate=true
+        log "INFO" "Circular logging detected (archive logging OFF) - database must be deactivated for offline backup"
+        log "INFO" "Forcing all applications to disconnect..."
+        db2 force applications all > /dev/null 2>&1 || log "WARN" "Some applications may still be connected"
+        log "INFO" "Deactivating database..."
+        db2 deactivate database "${DB_NAME}" > /dev/null 2>&1 || error_exit "Failed to deactivate database for offline backup"
+    fi
     
     # Create timestamped subdirectory for this backup session
     local session_dir="${BACKUP_PATH}/${DB_NAME}/${TIMESTAMP}"
@@ -206,9 +247,14 @@ perform_backup() {
     local bf="${session_dir}/${DB_NAME}_${BACKUP_TYPE}_${TIMESTAMP}"
     log "INFO" "Starting ${BACKUP_TYPE} backup: ${DB_NAME} -> ${session_dir}/"
     
-    # Build backup command - DB2 syntax: BACKUP DATABASE ... TO 'directory' WITH ... BUFFERS ... [COMPRESS] ...
+    # Build backup command - DB2 syntax: BACKUP DATABASE ... [ONLINE] ... TO 'directory' WITH ... BUFFERS ... [COMPRESS] ...
     # Note: DB2 creates files with its own naming, so use directory path, not full filename
+    # For archive logging: use ONLINE keyword for online backup
+    # For circular logging: no ONLINE keyword (offline backup after deactivation)
     local cmd="BACKUP DATABASE ${DB_NAME}"
+    if [[ "${needs_offline}" == "false" ]]; then
+        cmd="${cmd} ONLINE"
+    fi
     case "${BACKUP_TYPE}" in
         full) ;;
         incremental) cmd="${cmd} INCREMENTAL" ;;
@@ -226,6 +272,12 @@ perform_backup() {
     echo "${backup_output}" >> "${LOG_FILE}"
     # Also log output to console for debugging
     log "INFO" "DB2 backup output: ${backup_output}"
+    
+    # Reactivate database if it was deactivated for offline backup
+    if [[ "${needs_deactivate}" == "true" ]]; then
+        log "INFO" "Reactivating database..."
+        db2 activate database "${DB_NAME}" > /dev/null 2>&1 || log "WARN" "Failed to reactivate database - may need manual intervention"
+    fi
     
     # Check for DB2 errors in output even if exit code is 0
     if echo "${backup_output}" | grep -qiE "SQL[0-9]+.*error|SQLSTATE.*error|failed"; then
