@@ -1,0 +1,22 @@
+# NFS Backup Deployment Configuration
+
+# NFS server hostname or IP address
+nfs_server: dd.demo.local
+
+# Read-Write mount configuration (for backups)
+rw_mount:
+  export: /storage_unit/subdir_1
+  mount_point: /dd/backup
+  mode: rw
+
+# Read-Only mount configuration (for recovery)
+ro_mount:
+  export: /storage_unit/subdir_1
+  mount_point: /dd/recover
+  mode: ro
+
+# User and group configuration
+user:
+  name: backup_svc
+  group: backup_svc
+
